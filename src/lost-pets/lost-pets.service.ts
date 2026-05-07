@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Point } from 'typeorm';
+import { cacheKeys } from 'src/core/cache/cache.keys';
+import { RedisCacheService } from 'src/core/cache/redis-cache.service';
 import { LostPet } from 'src/core/entities/lost-pet.entity';
 import { Repository } from 'typeorm';
 import { CreateLostPetDto } from './dto/create-lost-pet.dto';
@@ -10,7 +12,23 @@ export class LostPetsService {
   constructor(
     @InjectRepository(LostPet)
     private readonly lostPetsRepository: Repository<LostPet>,
+    private readonly cacheService: RedisCacheService,
   ) {}
+
+  async findActiveLostPets(): Promise<LostPet[]> {
+    const cachedPets = await this.cacheService.get<LostPet[]>(cacheKeys.lostPets);
+    if (cachedPets) {
+      return cachedPets;
+    }
+
+    const pets = await this.lostPetsRepository.find({
+      where: { isActive: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    await this.cacheService.set(cacheKeys.lostPets, pets);
+    return pets;
+  }
 
   async createLostPet(createLostPetDto: CreateLostPetDto): Promise<LostPet> {
     const ownerName = createLostPetDto.ownerName ?? createLostPetDto.owner_name ?? '';
@@ -42,6 +60,8 @@ export class LostPetsService {
       isActive,
     });
 
-    return this.lostPetsRepository.save(lostPet);
+    const savedLostPet = await this.lostPetsRepository.save(lostPet);
+    await this.cacheService.del(cacheKeys.lostPets);
+    return savedLostPet;
   }
 }

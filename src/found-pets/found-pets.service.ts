@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Point } from 'typeorm';
 import { envs } from 'src/config/envs';
+import { cacheKeys } from 'src/core/cache/cache.keys';
+import { RedisCacheService } from 'src/core/cache/redis-cache.service';
 import { FoundPet } from 'src/core/entities/found-pet.entity';
 import { LostPet } from 'src/core/entities/lost-pet.entity';
 import { EmailOptions } from 'src/core/models/email-options.model';
@@ -35,7 +37,22 @@ export class FoundPetsService {
     @InjectRepository(LostPet)
     private readonly lostPetsRepository: Repository<LostPet>,
     private readonly emailService: EmailService,
+    private readonly cacheService: RedisCacheService,
   ) {}
+
+  async findFoundPets(): Promise<FoundPet[]> {
+    const cachedPets = await this.cacheService.get<FoundPet[]>(cacheKeys.foundPets);
+    if (cachedPets) {
+      return cachedPets;
+    }
+
+    const pets = await this.foundPetsRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+
+    await this.cacheService.set(cacheKeys.foundPets, pets);
+    return pets;
+  }
 
   async createFoundPet(createFoundPetDto: CreateFoundPetDto) {
     const finderName = createFoundPetDto.finderName ?? createFoundPetDto.finder_name ?? '';
@@ -65,6 +82,7 @@ export class FoundPetsService {
     });
 
     const savedFoundPet = await this.foundPetsRepository.save(foundPet);
+    await this.cacheService.del(cacheKeys.foundPets);
     const matches = await this.findLostPetsWithinRadius(
       createFoundPetDto.lng,
       createFoundPetDto.lat,
