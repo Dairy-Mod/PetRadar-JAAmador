@@ -18,6 +18,8 @@ interface LostPetMatchEmailData {
   distance: number;
 }
 
+
+// Función para contruir correo con coincidencia de mascota encontrada
 export const buildFoundPetMatchTemplate = (
   match: LostPetMatchEmailData,
   foundPet: CreateFoundPetDto,

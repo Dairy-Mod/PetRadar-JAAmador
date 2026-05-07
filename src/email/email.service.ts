@@ -22,7 +22,7 @@ export class EmailService {
         })
         return true;
         } catch (error) {
-            console.error("Error al enviar el correo:", error);
+            console.error("Error al enviar el correo, intenta de nuevo:", error);
             return false;
         }
     }
